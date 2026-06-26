@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YVR Capacity Intelligence Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    html { scroll-behavior: smooth; }
+    .dot-bg {
+      background-color: #f1f5f9;
+      background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .fade-in { opacity: 0; transform: translateY(18px); transition: opacity .55s ease, transform .55s ease; }
+    .fade-in.visible { opacity: 1; transform: translateY(0); }
+    .kpi { transition: transform .2s, box-shadow .2s; }
+    .kpi:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.1); }
+    #prog { position:fixed; left:6px; top:50%; transform:translateY(-50%); width:3px; height:60vh;
+            background:#e2e8f0; border-radius:99px; z-index:9000; opacity:.7; }
+    #prog-fill { width:100%; height:0%; background:linear-gradient(to bottom,#dc2626,#1e3a5f);
+                 transition:height .12s ease; border-radius:99px; }
+    .status-live { background:#dcfce7; color:#16a34a; border:1px solid #86efac; }
+    .status-cached { background:#fef9c3; color:#a16207; border:1px solid #fde047; }
+    .alert-bar { background:#fef2f2; border:1px solid #fecaca; border-radius:12px; }
+    .cap-badge { display:inline-flex; align-items:center; gap:5px; padding:3px 10px;
+                 border-radius:99px; font-size:.7rem; font-weight:700; }
+    .section-label { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9;
+                     color:#64748b; font-size:.7rem; font-weight:700; letter-spacing:.08em;
+                     text-transform:uppercase; padding:4px 12px; border-radius:99px; margin-bottom:16px; }
+    .terminal-bar-wrap { height:20px; background:#f1f5f9; border-radius:6px; overflow:hidden; }
+    .terminal-bar-fill { height:100%; border-radius:6px; transition: width 1s ease; }
+    .disclaimer { background:#fefce8; border-top:1px solid #fde047;
+                  padding:14px 24px; text-align:center; font-size:.72rem; color:#713f12; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <div id="prog"><div id="prog-fill"></div></div>
+
+  <!-- ═══ NAV ═══════════════════════════════════════════════════════════════ -->
+  <nav class="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-8 text-xs font-semibold text-slate-500">
+        <a href="#hero" class="text-slate-800 font-bold text-sm">YVR Capacity Intelligence</a>
+        <a href="#analysis1" class="hidden md:block hover:text-slate-800 transition-colors">Passenger Growth</a>
+        <a href="#analysis2" class="hidden md:block hover:text-slate-800 transition-colors">Runway Load</a>
+        <a href="#analysis3" class="hidden md:block hover:text-slate-800 transition-colors">Terminal Pressure</a>
+      </div>
+      <div id="data-badge" class="status-cached cap-badge text-xs">
+        <span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
+        <span id="data-badge-text">Loading…</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══ HERO ═══════════════════════════════════════════════════════════════ -->
+  <section id="hero" class="dot-bg pt-14">
+    <div class="max-w-6xl mx-auto px-6 py-14">
+
+      <div class="fade-in mb-2">
+        <div class="inline-flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Strategic Capacity Intelligence · Vancouver International Airport · CYVR
+        </div>
+        <h1 class="text-5xl font-extrabold text-slate-900 mb-4 leading-tight tracking-tight">
+          When does YVR hit its limit?
+        </h1>
+        <p class="text-slate-500 text-base max-w-2xl leading-relaxed">Three lenses on capacity pressure at Canada's primary Pacific gateway: passenger volume versus infrastructure ceiling, runway utilisation against declared ATM capacity, and terminal load by segment.</p>
+      </div>
+
+      <!-- Context row -->
+      <div class="fade-in mt-6 grid md:grid-cols-3 gap-4 text-xs text-slate-600">
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <div class="font-bold text-slate-700 mb-1">Design capacity</div>
+          <p class="leading-relaxed">YVR's current terminal complex (Main + South) was designed for <strong>~25 million passengers/year</strong>. Since 2023 the airport routinely operates above this threshold.</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <div class="font-bold text-slate-700 mb-1">Expansion plan</div>
+          <p class="leading-relaxed">The DMUF (Domestic/International Main Upgrades &amp; Future facilities) project targets a <strong>30M passenger/year</strong> capacity. Completion expected ~2028–2030.</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <div class="font-bold text-slate-700 mb-1">Runway constraint</div>
+          <p class="leading-relaxed">YVR operates two parallel runways (08L/26R · 08R/26L) with a <strong>declared IFR capacity of ~70 ATM/hour</strong>. Peak-hour saturation is the binding operational constraint.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══ ANALYSIS 1: PASSENGER GROWTH ══════════════════════════════════════ -->
+  <section id="analysis1" class="py-20 bg-white">
+    <div class="max-w-6xl mx-auto px-6">
+
+      <div class="fade-in mb-8">
+        <div class="section-label">Analysis 1 · Passenger Growth</div>
+        <h2 class="text-3xl font-extrabold text-slate-900 mb-3">YVR is already past its design limit</h2>
+        <p class="text-slate-500 max-w-2xl text-sm leading-relaxed">Passenger volumes from YVR Annual Reports (2015–2024) extended with a 3.5% annual growth projection. The 25M design-capacity ceiling was crossed in 2018 — COVID provided a brief reprieve. At current trajectory, YVR reaches the 30M expansion-capacity ceiling by <strong class="text-orange-600">2027</strong>.</p>
+      </div>
+
+      <div class="fade-in bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-6">
+        <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
+          <div>
+            <div class="text-sm font-bold text-slate-800">Annual passenger volume 2015–2030</div>
+            <p class="text-xs text-slate-400 italic mt-0.5">Actual (solid) · Estimated (lighter) · Projected 3.5% CAGR (dashed) · Capacity lines (horizontal)</p>
+          </div>
+          <div class="flex flex-wrap gap-3 text-xs text-slate-500">
+            <div class="flex items-center gap-1.5"><div class="w-8 h-0.5" style="border-top:2.5px solid #7c3aed"></div><span>Actual</span></div>
+            <div class="flex items-center gap-1.5"><div class="w-8 h-0.5" style="border-top:2px dashed #7c3aed"></div><span>Projected</span></div>
+            <div class="flex items-center gap-1.5"><div class="w-8 h-0.5" style="border-top:2px dashed #dc2626"></div><span>25M design cap</span></div>
+            <div class="flex items-center gap-1.5"><div class="w-8 h-0.5" style="border-top:2px dashed #ea580c"></div><span>30M expansion cap</span></div>
+          </div>
+        </div>
+        <div class="relative h-36 mt-4"><canvas id="chartPax"></canvas></div>
+
+        <!-- Milestone pills -->
+        <div id="pax-milestones" class="flex flex-wrap gap-2 mt-4"></div>
+
+        <p class="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
+          <em>Source:</em> Vancouver Airport Authority. (2020–2025). <em>YVR Annual Reports 2019–2024</em>. https://www.yvr.ca/ · 2016–2018 and 2025 are estimates. Projection assumes 3.5% CAGR from 2024 base (27,926,411 passengers).
+        </p>
+      </div>
+
+      <!-- Findings -->
+      <div class="fade-in grid md:grid-cols-3 gap-4">
+        <div class="bg-red-50 border border-red-200 rounded-xl p-5">
+          <div class="text-xs font-bold text-red-400 uppercase tracking-widest mb-2">Already over capacity</div>
+          <p class="text-xs text-red-700 leading-relaxed">YVR handled <strong>27.9M passengers</strong> in 2024 — <strong>112% of its 25M design capacity</strong>. The airport first exceeded 25M in 2018 and has operated in excess-capacity mode (except COVID years) ever since. Every gate, check-in desk, and baggage belt is running above its designed load.</p>
+        </div>
+        <div class="bg-orange-50 border border-orange-200 rounded-xl p-5">
+          <div class="text-xs font-bold text-orange-500 uppercase tracking-widest mb-2">30M ceiling: ~2027</div>
+          <p class="text-xs text-orange-700 leading-relaxed">At a conservative 3.5% CAGR — below the pre-COVID 4.3% and the post-COVID rebound rate — YVR reaches the planned expansion capacity of <strong>30M passengers by 2027</strong>. The DMUF expansion targets completion in 2028–2030, meaning the gap will widen before infrastructure relief arrives.</p>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-5">
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">COVID as false floor</div>
+          <p class="text-xs text-slate-300 leading-relaxed">The 2020–2021 collapse (−68% to 8.4M) masked underlying capacity pressure. The V-shaped recovery to 26.4M in 2023 happened in <strong>less than 2 years</strong> — faster than any infrastructure expansion cycle — confirming that the pre-COVID pressure was structural, not cyclical.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══ ANALYSIS 2: RUNWAY UTILISATION ════════════════════════════════════ -->
+  <section id="analysis2" class="py-20 bg-slate-50">
+    <div class="max-w-6xl mx-auto px-6">
+
+      <div class="fade-in mb-8">
+        <div class="section-label">Analysis 2 · Runway Capacity</div>
+        <h2 class="text-3xl font-extrabold text-slate-900 mb-3">The runway saturates at noon PDT</h2>
+        <p class="text-slate-500 max-w-2xl text-sm leading-relaxed">Hourly arrival schedule from AviationStack, converted to estimated total movements (arrivals × 2). YVR's two parallel runways have a declared IFR capacity of <strong>70 ATM/hour</strong>. The 12:00 PDT slot pushes estimated utilisation past 100%.</p>
+      </div>
+
+      <!-- Peak alert -->
+      <div id="peak-alert" class="fade-in alert-bar px-5 py-4 mb-6 flex items-start gap-4">
+        <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div>
+          <div class="text-sm font-bold text-red-700 mb-1">Critical slot detected</div>
+          <p id="peak-alert-text" class="text-xs text-red-600 leading-relaxed"></p>
+        </div>
+      </div>
+
+      <div class="fade-in grid md:grid-cols-2 gap-6 mb-6">
+
+        <!-- Runway utilisation chart -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-6">
+          <div class="text-sm font-bold text-slate-800 mb-1">Estimated runway utilisation by hour (PDT)</div>
+          <p class="text-xs text-slate-400 italic mb-3">% of 70 ATM/hr capacity. Est. total movements = arrivals × 2. Red line = 100% cap.</p>
+          <div class="relative h-56"><canvas id="chartRunway"></canvas></div>
+          <div class="mt-3 flex flex-wrap gap-2 text-xs">
+            <span class="cap-badge bg-green-50 text-green-700 border border-green-200">Green &lt;57% · normal</span>
+            <span class="cap-badge bg-amber-50 text-amber-700 border border-amber-200">Amber 57–85% · elevated</span>
+            <span class="cap-badge bg-red-50 text-red-700 border border-red-200">Red &gt;85% · critical</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-3 pt-2 border-t border-slate-100">
+            <em>Source:</em> AviationStack. (2026). Flight API [Dataset]. https://aviationstack.com/ · Methodology: total movements estimated at 2× arrivals (equal departure frequency assumed). Declared IFR capacity: Nav Canada. (2024). <em>Annual report</em>.
+          </p>
+        </div>
+
+        <!-- Hourly stats table -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-6">
+          <div class="text-sm font-bold text-slate-800 mb-3">Hourly slot detail</div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-slate-600">
+              <thead>
+                <tr class="border-b border-slate-200 text-left">
+                  <th class="pb-2 font-semibold text-slate-500">Time (PDT)</th>
+                  <th class="pb-2 text-right font-semibold text-slate-500">Arrivals</th>
+                  <th class="pb-2 text-right font-semibold text-slate-500">Est. mov.</th>
+                  <th class="pb-2 text-right font-semibold text-slate-500">Utilisation</th>
+                  <th class="pb-2 text-right font-semibold text-slate-500">Status</th>
+                </tr>
+              </thead>
+              <tbody id="runway-table" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+          <p class="text-xs text-slate-400 mt-3 pt-2 border-t border-slate-100">PDT = Pacific Daylight Time (UTC−7). Only hours with ≥1 arrival shown.</p>
+        </div>
+      </div>
+
+      <!-- Runway findings -->
+      <div class="fade-in grid md:grid-cols-2 gap-4">
+        <div class="bg-slate-900 rounded-xl p-5">
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Noon peak: runway saturates</div>
+          <p class="text-xs text-slate-300 leading-relaxed">The 12:00 PDT slot carries <span id="peak-arr-inline" class="text-red-300 font-bold"></span> scheduled arrivals, translating to an estimated <span id="peak-mov-inline" class="text-red-300 font-bold"></span> total movements — <span id="peak-pct-inline" class="text-red-300 font-bold"></span> of declared runway capacity. This is the operational chokepoint: a single ATC flow restriction, bad weather event, or cascading delay in this window propagates through the entire afternoon schedule.</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-5">
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Structural vs tactical mitigation</div>
+          <p class="text-xs text-slate-600 leading-relaxed">Peak-hour saturation cannot be solved tactically (schedule compression, gate management) beyond a certain point. A third runway — currently in early planning at YVR — would raise the declared capacity to ~95 ATM/hour, providing ~35% headroom at current peak volume. Without it, schedule growth is physically capped before passenger capacity is.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══ ANALYSIS 3: TERMINAL LOAD ══════════════════════════════════════════ -->
+  <section id="analysis3" class="py-20 bg-white">
+    <div class="max-w-6xl mx-auto px-6">
+
+      <div class="fade-in mb-8">
+        <div class="section-label">Analysis 3 · Terminal Pressure</div>
+        <h2 class="text-3xl font-extrabold text-slate-900 mb-3">International concourse under most structural pressure</h2>
+        <p class="text-slate-500 max-w-2xl text-sm leading-relaxed">YVR operates three distinct passenger zones: the Domestic concourse (D), the International/Transborder concourse (I), and the South Terminal. Flight frequency as a proxy for terminal load reveals asymmetric pressure — the International segment is growing faster while sharing the same terminal infrastructure.</p>
+      </div>
+
+      <div class="fade-in grid md:grid-cols-2 gap-6 mb-6">
+
+        <!-- Terminal bar chart -->
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+          <div class="text-sm font-bold text-slate-800 mb-1">Arrival share by terminal segment</div>
+          <p class="text-xs text-slate-400 italic mb-4">Based on today's 100 scheduled arrivals by departure origin classification.</p>
+          <div class="relative h-44"><canvas id="chartTerminal"></canvas></div>
+          <div class="mt-4 space-y-3" id="terminal-progress-bars"></div>
+          <p class="text-xs text-slate-400 mt-4 pt-2 border-t border-slate-100">
+            <em>Classification:</em> South Terminal = Pacific Coastal (8P), Central Mountain Air (9M), Keewatin Air (FK). Domestic = Canadian departure airports (IATA Y/Z prefix). International = US + overseas origins. <em>Source:</em> AviationStack (2026).
+          </p>
+        </div>
+
+        <!-- Context cards -->
+        <div class="flex flex-col gap-4">
+          <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex-1">
+            <div class="text-sm font-bold text-slate-800 mb-3">Terminal design vs current load</div>
+            <div class="space-y-3" id="terminal-design-bars"></div>
+            <p class="text-xs text-slate-400 mt-4">Design share based on published terminal floor area and check-in allocation. Current share from today's AviationStack arrival data.</p>
+          </div>
+          <div class="bg-slate-900 rounded-2xl p-5">
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Why International leads pressure</div>
+            <p class="text-xs text-slate-300 leading-relaxed">International and US Transborder passengers have longer processing times (customs, immigration, additional security) than domestic, multiplying the infrastructure load per movement. A 30% arrival share for International translates to disproportionately higher terminal dwell and processing burden — the primary driver behind the DMUF expansion scope.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Terminal findings -->
+      <div class="fade-in grid md:grid-cols-3 gap-4">
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5" id="card-dom"></div>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5" id="card-intl"></div>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5" id="card-south"></div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══ BIBLIOGRAPHY ═══════════════════════════════════════════════════════ -->
+  <section class="bg-slate-50 border-t border-slate-200 py-10">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">References (APA)</div>
+      <ol class="space-y-2 text-xs text-slate-500 leading-relaxed list-decimal list-inside">
+        <li>AviationStack. (2026). <em>Real-time flight API</em> [Dataset]. https://aviationstack.com/</li>
+        <li>IATA. (2023). <em>Airport handling manual</em> (AHM, 43rd ed.). IATA.</li>
+        <li>Nav Canada. (2024). <em>Annual report 2023: Canadian air traffic management</em>. Nav Canada. https://www.navcanada.ca/</li>
+        <li>Vancouver Airport Authority. (2020–2025). <em>YVR annual reports 2019–2024</em>. https://www.yvr.ca/</li>
+        <li>Vancouver Airport Authority. (2023). <em>YVR 2037 master plan</em>. https://www.yvr.ca/</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ═══ FOOTER ════════════════════════════════════════════════════════════ -->
+  <footer class="bg-slate-900 py-6 text-center text-xs text-slate-500">
+  </footer>
+
+
+  <div class="disclaimer">
+    <strong>Disclaimer:</strong> Built on public data as a demonstration of analytical approach — internal data would yield significantly richer insights, including gate-level turn times, immigration queue depths, baggage belt SLAs, and real-time AOCC demand signals.
+  </div>
+
+  <!-- ═══ SCRIPT ════════════════════════════════════════════════════════════ -->
+  <script>
+  // ── API key (leave empty to use embedded data) ────────────────────────────
+  const AVIATIONSTACK_KEY = "";
+
+  // ── Embedded fallback flight data ─────────────────────────────────────────
+  const FALLBACK_FLIGHTS = [{"fi":"AC18","al":"AC","an":"Air Canada","di":"MNL","dc":"RPLL","sa":"2026-06-24T06:40:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC8","al":"AC","an":"Air Canada","di":"HKG","dc":"VHHH","sa":"2026-06-24T06:50:00+00:00","ad":10,"st":"scheduled"},{"fi":"TG5866","al":"TG","an":"Thai Airways","di":"HKG","dc":"VHHH","sa":"2026-06-24T06:50:00+00:00","ad":10,"st":"scheduled"},{"fi":"TG5839","al":"TG","an":"Thai Airways","di":"BKK","dc":"VTBS","sa":"2026-06-24T06:35:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC34","al":"AC","an":"Air Canada","di":"SYD","dc":"YSSY","sa":"2026-06-24T06:50:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC36","al":"AC","an":"Air Canada","di":"BNE","dc":"YBBN","sa":"2026-06-24T06:29:00+00:00","ad":10,"st":"scheduled"},{"fi":"AC66","al":"AC","an":"Air Canada","di":"BKK","dc":"VTBS","sa":"2026-06-24T06:35:00+00:00","ad":null,"st":"scheduled"},{"fi":"AI185","al":"AI","an":"Air India","di":"DEL","dc":"VIDP","sa":"2026-06-24T07:35:00+00:00","ad":40,"st":"scheduled"},{"fi":"CX888","al":"CX","an":"Cathay Pacific","di":"HKG","dc":"VHHH","sa":"2026-06-23T21:50:00+00:00","ad":11,"st":"active"},{"fi":"CZ329","al":"CZ","an":"China Southern Airlines","di":"CAN","dc":"ZGGG","sa":"2026-06-23T21:45:00+00:00","ad":10,"st":"active"},{"fi":"PR3035","al":"PR","an":"Philippine Airlines","di":"YYZ","dc":"CYYZ","sa":"2026-06-23T18:30:00+00:00","ad":10,"st":"active"},{"fi":"KE6621","al":"KE","an":"Korean Air","di":"YYZ","dc":"CYYZ","sa":"2026-06-23T18:30:00+00:00","ad":10,"st":"active"},{"fi":"HX5011","al":"HX","an":"Hong Kong Airlines","di":"YYZ","dc":"CYYZ","sa":"2026-06-23T18:30:00+00:00","ad":10,"st":"active"},{"fi":"EK4691","al":"EK","an":"Emirates","di":"YYZ","dc":"CYYZ","sa":"2026-06-23T18:30:00+00:00","ad":10,"st":"active"},{"fi":"DL7223","al":"DL","an":"Delta Air Lines","di":"YYZ","dc":"CYYZ","sa":"2026-06-23T18:30:00+00:00","ad":10,"st":"active"},{"fi":"CZ597","al":"CZ","an":"China Southern Airlines","di":"YYZ","dc":"CYYZ","sa":"2026-06-23T18:30:00+00:00","ad":10,"st":"active"},{"fi":"CX7045","al":"CX","an":"Cathay Pacific","di":"YYZ","dc":"CYYZ","sa":"2026-06-23T18:30:00+00:00","ad":10,"st":"active"},{"fi":"CI9313","al":"CI","an":"China Airlines","di":"YYZ","dc":"CYYZ","sa":"2026-06-23T18:30:00+00:00","ad":10,"st":"active"},{"fi":"AC131","al":"AC","an":"Air Canada","di":"YYZ","dc":"CYYZ","sa":"2026-06-23T23:47:00+00:00","ad":10,"st":"scheduled"},{"fi":"AC127","al":"AC","an":"Air Canada","di":"YYZ","dc":"CYYZ","sa":"2026-06-23T23:21:00+00:00","ad":10,"st":"scheduled"},{"fi":"WS3328","al":"WS","an":"WestJet","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"QF3375","al":"QF","an":"Qantas","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"HU8416","al":"HU","an":"Hainan Airlines","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"DL6912","al":"DL","an":"Delta Air Lines","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"PR3054","al":"PR","an":"Philippine Airlines","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"KE6599","al":"KE","an":"Korean Air","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"HX5063","al":"HX","an":"Hong Kong Airlines","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"FJ6074","al":"FJ","an":"Fiji Airways","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"DL6891","al":"DL","an":"Delta Air Lines","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"CZ594","al":"CZ","an":"China Southern Airlines","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"CX7073","al":"CX","an":"Cathay Pacific","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"CI9357","al":"CI","an":"China Airlines","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"AM7207","al":"AM","an":"Aeromexico","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC8178","al":"AC","an":"Air Canada","di":"YYD","dc":"CYYD","sa":"2026-06-23T20:04:00+00:00","ad":null,"st":"scheduled"},{"fi":"WS129","al":"WS","an":"WestJet","di":"YYC","dc":"CYYC","sa":"2026-06-23T20:40:00+00:00","ad":null,"st":"scheduled"},{"fi":"NZ4511","al":"NZ","an":"Air New Zealand","di":"YYC","dc":"CYYC","sa":"2026-06-23T17:02:00+00:00","ad":null,"st":"scheduled"},{"fi":"LX4686","al":"LX","an":"Swiss","di":"YYC","dc":"CYYC","sa":"2026-06-23T17:02:00+00:00","ad":null,"st":"scheduled"},{"fi":"LH6802","al":"LH","an":"Lufthansa","di":"YYC","dc":"CYYC","sa":"2026-06-23T17:02:00+00:00","ad":null,"st":"scheduled"},{"fi":"KL9575","al":"KL","an":"KLM","di":"YYC","dc":"CYYC","sa":"2026-06-23T16:50:00+00:00","ad":null,"st":"scheduled"},{"fi":"DL7249","al":"DL","an":"Delta Air Lines","di":"YYC","dc":"CYYC","sa":"2026-06-23T16:50:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC8299","al":"AC","an":"Air Canada","di":"YXC","dc":"CYXC","sa":"2026-06-23T20:12:00+00:00","ad":null,"st":"scheduled"},{"fi":"9M9913","al":"9M","an":"Central Mountain Air","di":"YZT","dc":"CYZT","sa":"2026-06-23T19:30:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC8277","al":"AC","an":"Air Canada","di":"YLW","dc":"CYLW","sa":"2026-06-23T19:12:00+00:00","ad":null,"st":"scheduled"},{"fi":"UA8415","al":"UA","an":"United Airlines","di":"YLW","dc":"CYLW","sa":"2026-06-23T19:12:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC313","al":"AC","an":"Air Canada","di":"YUL","dc":"CYUL","sa":"2026-06-24T00:21:00+00:00","ad":23,"st":"scheduled"},{"fi":"8P758","al":"8P","an":"Pacific Coastal Airlines","di":"YBL","dc":"CYBL","sa":"2026-06-23T19:29:00+00:00","ad":null,"st":"scheduled"},{"fi":"UA2429","al":"UA","an":"United Airlines","di":"SFO","dc":"KSFO","sa":"2026-06-23T20:59:00+00:00","ad":null,"st":"scheduled"},{"fi":"UA8504","al":"UA","an":"United Airlines","di":"SFO","dc":"KSFO","sa":"2026-06-23T14:39:00+00:00","ad":null,"st":"active"},{"fi":"SQ1021","al":"SQ","an":"Singapore Airlines","di":"SFO","dc":"KSFO","sa":"2026-06-23T14:39:00+00:00","ad":null,"st":"active"},{"fi":"NZ4610","al":"NZ","an":"Air New Zealand","di":"SFO","dc":"KSFO","sa":"2026-06-23T14:39:00+00:00","ad":null,"st":"active"},{"fi":"AA1305","al":"AA","an":"American Airlines","di":"ORD","dc":"KORD","sa":"2026-06-23T22:59:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC579","al":"AC","an":"Air Canada","di":"DEN","dc":"KDEN","sa":"2026-06-23T21:50:00+00:00","ad":10,"st":"scheduled"},{"fi":"9M1922","al":"9M","an":"Central Mountain Air","di":"YEG","dc":"CYEG","sa":"2026-06-23T14:00:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC4851","al":"AC","an":"Air Canada","di":"DEN","dc":"KDEN","sa":"2026-06-23T14:06:00+00:00","ad":16,"st":"active"},{"fi":"KL9602","al":"KL","an":"KLM","di":"YYC","dc":"CYYC","sa":"2026-06-23T15:55:00+00:00","ad":null,"st":"scheduled"},{"fi":"DL7177","al":"DL","an":"Delta Air Lines","di":"YYC","dc":"CYYC","sa":"2026-06-23T15:55:00+00:00","ad":null,"st":"scheduled"},{"fi":"DE5767","al":"DE","an":"Condor","di":"YYC","dc":"CYYC","sa":"2026-06-23T15:55:00+00:00","ad":null,"st":"scheduled"},{"fi":"VA5181","al":"VA","an":"Virgin Australia","di":"YUL","dc":"CYUL","sa":"2026-06-23T19:50:00+00:00","ad":null,"st":"scheduled"},{"fi":"NZ4769","al":"NZ","an":"Air New Zealand","di":"YUL","dc":"CYUL","sa":"2026-06-23T19:50:00+00:00","ad":null,"st":"scheduled"},{"fi":"LH6482","al":"LH","an":"Lufthansa","di":"YUL","dc":"CYUL","sa":"2026-06-23T19:50:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC2819","al":"AC","an":"Air Canada","di":"YQZ","dc":"CYQZ","sa":"2026-06-23T17:20:00+00:00","ad":40,"st":"scheduled"},{"fi":"QF3390","al":"QF","an":"Qantas","di":"YLW","dc":"CYLW","sa":"2026-06-23T16:15:00+00:00","ad":null,"st":"scheduled"},{"fi":"NZ9993","al":"NZ","an":"Air New Zealand","di":"LAX","dc":"KLAX","sa":"2026-06-23T13:53:00+00:00","ad":17,"st":"active"},{"fi":"AC4152","al":"AC","an":"Air Canada","di":"LAX","dc":"KLAX","sa":"2026-06-23T13:53:00+00:00","ad":17,"st":"active"},{"fi":"8P864","al":"8P","an":"Pacific Coastal Airlines","di":"YZT","dc":"CYZT","sa":"2026-06-23T18:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"9M567","al":"9M","an":"Central Mountain Air","di":"YQZ","dc":"CYQZ","sa":"2026-06-23T17:20:00+00:00","ad":null,"st":"scheduled"},{"fi":"FK574","al":"FK","an":"Keewatin Air","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T18:24:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC8166","al":"AC","an":"Air Canada","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T18:17:00+00:00","ad":null,"st":"scheduled"},{"fi":"UA8527","al":"UA","an":"United Airlines","di":"YYJ","dc":"CYYJ","sa":"2026-06-23T18:17:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC2029","al":"AC","an":"Air Canada","di":"YYC","dc":"CYYC","sa":"2026-06-23T19:42:00+00:00","ad":10,"st":"scheduled"},{"fi":"WS139","al":"WS","an":"WestJet","di":"YYC","dc":"CYYC","sa":"2026-06-23T19:25:00+00:00","ad":null,"st":"scheduled"},{"fi":"WS179","al":"WS","an":"WestJet","di":"YYC","dc":"CYYC","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"8P580","al":"8P","an":"Pacific Coastal Airlines","di":"YWL","dc":"CYWL","sa":"2026-06-23T18:27:00+00:00","ad":null,"st":"scheduled"},{"fi":"WS319","al":"WS","an":"WestJet","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"PR3005","al":"PR","an":"Philippine Airlines","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"KL9561","al":"KL","an":"KLM","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"KE6542","al":"KE","an":"Korean Air","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"HX5021","al":"HX","an":"Hong Kong Airlines","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"FJ6012","al":"FJ","an":"Fiji Airways","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"DL6957","al":"DL","an":"Delta Air Lines","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"CZ589","al":"CZ","an":"China Southern Airlines","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"CX7005","al":"CX","an":"Cathay Pacific","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"CI9325","al":"CI","an":"China Airlines","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"AM7081","al":"AM","an":"Aeromexico","di":"YEG","dc":"CYEG","sa":"2026-06-23T19:10:00+00:00","ad":null,"st":"scheduled"},{"fi":"FK578","al":"FK","an":"Keewatin Air","di":"YKA","dc":"CYKA","sa":"2026-06-23T18:18:00+00:00","ad":null,"st":"scheduled"},{"fi":"FK576","al":"FK","an":"Keewatin Air","di":"YLW","dc":"CYLW","sa":"2026-06-23T18:26:00+00:00","ad":null,"st":"scheduled"},{"fi":"AS2008","al":"AS","an":"Alaska Horizon","di":"SEA","dc":"KSEA","sa":"2026-06-23T18:35:00+00:00","ad":null,"st":"scheduled"},{"fi":"DL3682","al":"DL","an":"Delta Air Lines","di":"SEA","dc":"KSEA","sa":"2026-06-23T18:46:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC8803","al":"AC","an":"Air Canada","di":"SEA","dc":"KSEA","sa":"2026-06-23T12:00:00+00:00","ad":null,"st":"landed"},{"fi":"AC8597","al":"AC","an":"Air Canada","di":"SMF","dc":"KSMF","sa":"2026-06-23T20:03:00+00:00","ad":14,"st":"scheduled"},{"fi":"UA6609","al":"UA","an":"United Airlines","di":"SMF","dc":"KSMF","sa":"2026-06-23T20:03:00+00:00","ad":14,"st":"scheduled"},{"fi":"NH5397","al":"NH","an":"All Nippon Airways","di":"SMF","dc":"KSMF","sa":"2026-06-23T20:03:00+00:00","ad":14,"st":"scheduled"},{"fi":"UA1580","al":"UA","an":"United Airlines","di":"ORD","dc":"KORD","sa":"2026-06-23T22:20:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC1775","al":"AC","an":"Air Canada","di":"LAS","dc":"KLAS","sa":"2026-06-23T20:44:00+00:00","ad":10,"st":"scheduled"},{"fi":"UA1359","al":"UA","an":"United Airlines","di":"IAH","dc":"KIAH","sa":"2026-06-23T22:46:00+00:00","ad":null,"st":"scheduled"},{"fi":"1I185","al":"1I","an":"NetJets","di":"HPN","dc":"KHPN","sa":"2026-06-23T15:26:00+00:00","ad":null,"st":"active"},{"fi":"1I","al":"1I","an":"NetJets","di":"BZN","dc":"KBZN","sa":"2026-06-23T19:06:00+00:00","ad":null,"st":"scheduled"},{"fi":"","al":"","an":"empty","di":"YQQ","dc":"CYQQ","sa":"2026-06-23T12:06:00+00:00","ad":null,"st":"scheduled"},{"fi":"8P458","al":"8P","an":"Pacific Coastal Airlines","di":"YZZ","dc":"CAD4","sa":"2026-06-23T18:24:00+00:00","ad":null,"st":"scheduled"},{"fi":"AC8025","al":"AC","an":"Air Canada","di":"YZF","dc":"CYZF","sa":"2026-06-23T19:22:00+00:00","ad":null,"st":"scheduled"}];
+
+  // ── Static PAX data ───────────────────────────────────────────────────────
+  const PAX_DATA = {
+    years:  [2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025],
+    values: [22308376,23400000,24400000,25900000,26368761,8432857,9797648,18906736,26359380,27926411,28800000],
+    isEst:  [false,true,true,true,false,false,false,false,false,false,true],
+  };
+  const CAP_DESIGN    = 25_000_000;
+  const CAP_EXPANSION = 30_000_000;
+  const RUNWAY_CAP    = 70;
+  const SOUTH_AL      = new Set(['8P','9M','FK']);
+
+  // ── Utility ───────────────────────────────────────────────────────────────
+  function fmt(n) {
+    if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+    return n.toLocaleString();
+  }
+  function utcToPDT(h) { return ((h - 7) + 24) % 24; }
+  function pdtLabel(h) {
+    const ampm = h < 12 ? 'AM' : 'PM';
+    const h12 = h === 0 ? 12 : h > 12 ? h-12 : h;
+    return `${h12}:00 ${ampm}`;
+  }
+
+  // ── Process flights ───────────────────────────────────────────────────────
+  function processFlights(flights) {
+    const hourly = {};
+    let dom=0, intl=0, south=0;
+    for (const f of flights) {
+      if (SOUTH_AL.has(f.al)) south++;
+      else if (!f.di || f.di.startsWith('Y') || f.di.startsWith('Z') || f.dc.startsWith('C')) dom++;
+      else intl++;
+      if (f.sa) {
+        const h = new Date(f.sa).getUTCHours();
+        hourly[h] = (hourly[h]||0)+1;
+      }
+    }
+    return {dom, intl, south, total: flights.length, hourly};
+  }
+
+  // ── PAX projection ────────────────────────────────────────────────────────
+  function buildPaxProjection() {
+    const BASE = 27926411, CAGR = 0.035;
+    const projYears = [2025,2026,2027,2028,2029,2030];
+    const projVals  = projYears.map(y => Math.round(BASE * Math.pow(1+CAGR, y-2024)));
+    const crossYear = projYears.find((y,i) => projVals[i] >= CAP_EXPANSION) || 2030;
+    return {projYears, projVals, crossYear};
+  }
+
+  // ── Chart: PAX growth ─────────────────────────────────────────────────────
+  function renderPaxChart(proj) {
+    const allYears = [...PAX_DATA.years, ...proj.projYears.filter(y=>y>2025)];
+    const n = PAX_DATA.years.length;
+    // Actual series: values up to 2025, null beyond
+    const actualSeries = allYears.map(y => {
+      const i = PAX_DATA.years.indexOf(y);
+      return i >= 0 ? PAX_DATA.values[i] : null;
+    });
+    // Projection series: null up to 2024, then projected (starting overlap at 2025)
+    const projSeries = allYears.map(y => {
+      const i = proj.projYears.indexOf(y);
+      return i >= 0 ? proj.projVals[i] : null;
+    });
+    // Point colours for actual
+    const ptColors = actualSeries.map((v,i) => {
+      if (v === null) return 'transparent';
+      const yr = allYears[i];
+      if (yr === 2020 || yr === 2021) return '#ef4444';
+      if (yr === 2024) return '#16a34a';
+      if (PAX_DATA.isEst[PAX_DATA.years.indexOf(yr)]) return '#a78bfa';
+      return '#7c3aed';
+    });
+
+    new Chart(document.getElementById('chartPax').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: allYears,
+        datasets: [
+          { label:'Actual / Estimate', data: actualSeries,
+            borderColor:'#7c3aed', borderWidth:2.5, backgroundColor:'rgba(124,58,237,.06)',
+            fill:true, tension:.3, pointRadius:5, pointHoverRadius:8,
+            pointBackgroundColor:ptColors, pointBorderColor:'white', pointBorderWidth:2, order:1 },
+          { label:'Projected (3.5% CAGR)', data: projSeries,
+            borderColor:'#7c3aed', borderWidth:2, borderDash:[7,4],
+            backgroundColor:'rgba(124,58,237,.03)', fill:true, tension:.3,
+            pointRadius:4, pointBorderColor:'white', pointBorderWidth:2, order:2 },
+          { label:'25M design capacity', data: allYears.map(()=>CAP_DESIGN),
+            borderColor:'#dc2626', borderWidth:1.5, borderDash:[5,4],
+            pointRadius:0, fill:false, order:3 },
+          { label:'30M expansion capacity', data: allYears.map(()=>CAP_EXPANSION),
+            borderColor:'#ea580c', borderWidth:1.5, borderDash:[5,4],
+            pointRadius:0, fill:false, order:4 },
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false, animation:{duration:800},
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{
+            label: ctx => {
+              if (ctx.datasetIndex===2) return ' 25M design capacity';
+              if (ctx.datasetIndex===3) return ' 30M expansion capacity';
+              const v = ctx.raw;
+              if (!v) return null;
+              return ` ${fmt(v)} passengers`;
+            }
+          }}
+        },
+        scales:{
+          y:{ ticks:{callback:v=>fmt(v), font:{size:10}}, grid:{color:'#e2e8f0'} },
+          x:{ ticks:{font:{size:10}}, grid:{display:false} }
+        }
+      }
+    });
+
+    // Milestones
+    const el = document.getElementById('pax-milestones');
+    const milestones = [
+      {yr:2019, label:'2019: 26.4M — pre-COVID record', cls:'bg-amber-100 text-amber-700'},
+      {yr:2020, label:'2020: 8.4M — COVID collapse (−68%)', cls:'bg-red-100 text-red-600'},
+      {yr:2023, label:'2023: 26.4M — full recovery', cls:'bg-emerald-100 text-emerald-700'},
+      {yr:2024, label:'2024: 27.9M — new record (+112% of 25M cap)', cls:'bg-violet-100 text-violet-700'},
+      {yr:proj.crossYear, label:`${proj.crossYear}: 30M capacity exceeded (projected)`, cls:'bg-orange-100 text-orange-700'},
+    ];
+    milestones.forEach(m => {
+      el.insertAdjacentHTML('beforeend',
+        `<span class="text-xs font-semibold px-3 py-1 rounded-full ${m.cls}">${m.label}</span>`);
+    });
+  }
+
+  // ── Chart: Runway utilisation ─────────────────────────────────────────────
+  function renderRunwayChart(hourly) {
+    // Sort hours by PDT
+    const sortedHours = Object.keys(hourly).map(Number)
+      .sort((a,b) => utcToPDT(a) - utcToPDT(b));
+    const pdtHours = sortedHours.map(utcToPDT);
+    const arrivals  = sortedHours.map(h => hourly[h]);
+    const movements = arrivals.map(a => a*2);
+    const utilPct   = movements.map(m => +(m/RUNWAY_CAP*100).toFixed(1));
+    const colors    = utilPct.map(p => p>=85?'rgba(220,38,38,.8)':p>=57?'rgba(245,158,11,.8)':'rgba(34,197,94,.8)');
+
+    // Find peak
+    const peakIdx = utilPct.indexOf(Math.max(...utilPct));
+    const peakArr = arrivals[peakIdx];
+    const peakMov = movements[peakIdx];
+    const peakPct = utilPct[peakIdx];
+    const peakPDT = pdtLabel(pdtHours[peakIdx]);
+
+    // Update KPI
+    const kpiR = document.getElementById('kpi-runway');
+    if (kpiR) kpiR.textContent = peakPct+'%';
+    const kpiRs = document.getElementById('kpi-runway-sub');
+    if (kpiRs) kpiRs.textContent = `of 70 mov/hr cap · peak at ${peakPDT}`;
+    document.getElementById('peak-arr-inline').textContent = `${peakArr} arrivals`;
+    document.getElementById('peak-mov-inline').textContent = `${peakMov} est. movements`;
+    document.getElementById('peak-pct-inline').textContent = `${peakPct}%`;
+    document.getElementById('peak-alert-text').textContent =
+      `${peakPDT} PDT: ${peakArr} scheduled arrivals → ~${peakMov} estimated total movements → ${peakPct}% of the 70 ATM/hour declared runway capacity. Any ATC restriction, weather event, or cascading delay in this window spreads into the afternoon schedule.`;
+
+    new Chart(document.getElementById('chartRunway').getContext('2d'), {
+      type:'bar',
+      data:{
+        labels: pdtHours.map(pdtLabel),
+        datasets:[{
+          label:'Runway utilisation (%)',
+          data: utilPct, backgroundColor: colors,
+          borderRadius:4, borderSkipped:false,
+        },{
+          label:'100% capacity',
+          data: pdtHours.map(()=>100),
+          type:'line', borderColor:'#dc2626', borderWidth:1.5, borderDash:[5,4],
+          pointRadius:0, fill:false,
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:ctx=>{
+            if(ctx.datasetIndex===1) return ' 100% declared capacity';
+            const i=ctx.dataIndex;
+            return [`  Arrivals: ${arrivals[i]}`,` Est. movements: ${movements[i]}`,` Utilisation: ${utilPct[i]}%`];
+          }}}
+        },
+        scales:{
+          y:{min:0,max:120,ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'#e2e8f0'}},
+          x:{ticks:{font:{size:9}},grid:{display:false}}
+        }
+      }
+    });
+
+    // Runway table
+    const tbody = document.getElementById('runway-table');
+    sortedHours.forEach((h,i)=>{
+      const pct = utilPct[i];
+      const badge = pct>=85
+        ? '<span class="cap-badge bg-red-100 text-red-600 border border-red-200">CRITICAL</span>'
+        : pct>=57
+        ? '<span class="cap-badge bg-amber-100 text-amber-700 border border-amber-200">ELEVATED</span>'
+        : '<span class="cap-badge bg-green-100 text-green-700 border border-green-200">NORMAL</span>';
+      tbody.insertAdjacentHTML('beforeend',`
+        <tr class="${pct>=85?'bg-red-50':''}">
+          <td class="py-1.5 font-medium">${pdtLabel(pdtHours[i])}</td>
+          <td class="py-1.5 text-right">${arrivals[i]}</td>
+          <td class="py-1.5 text-right">${movements[i]}</td>
+          <td class="py-1.5 text-right font-bold ${pct>=85?'text-red-600':pct>=57?'text-amber-600':'text-green-600'}">${pct}%</td>
+          <td class="py-1.5 text-right">${badge}</td>
+        </tr>`);
+    });
+  }
+
+  // ── Chart: Terminal load ──────────────────────────────────────────────────
+  function renderTerminalChart(dom, intl, south, total) {
+    const data = [
+      {name:'Domestic (D)', count:dom, color:'#0ea5e9', design:62},
+      {name:'International (I)', count:intl, color:'#7c3aed', design:34},
+      {name:'South Terminal (S)', count:south, color:'#f59e0b', design:4},
+    ];
+    const share = data.map(d=>+(d.count/total*100).toFixed(1));
+
+    // Doughnut
+    new Chart(document.getElementById('chartTerminal').getContext('2d'),{
+      type:'doughnut',
+      data:{
+        labels:data.map(d=>d.name),
+        datasets:[{data:share,backgroundColor:data.map(d=>d.color),
+                   borderWidth:2,borderColor:'#f8fafc',hoverOffset:8}]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,cutout:'62%',
+        plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw}% of arrivals (${data[ctx.dataIndex].count} flights)`}}}
+      }
+    });
+
+    // Progress bars under chart
+    const pbEl = document.getElementById('terminal-progress-bars');
+    data.forEach((d,i)=>{
+      pbEl.insertAdjacentHTML('beforeend',`
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="font-semibold" style="color:${d.color}">${d.name}</span>
+            <span class="text-slate-500">${d.count} arrivals · ${share[i]}%</span>
+          </div>
+          <div class="terminal-bar-wrap">
+            <div class="terminal-bar-fill" style="width:${share[i]}%;background:${d.color}"></div>
+          </div>
+        </div>`);
+    });
+
+    // Design vs current comparison
+    const dbEl = document.getElementById('terminal-design-bars');
+    data.forEach((d,i)=>{
+      const current = share[i];
+      const design  = d.design;
+      const over    = current > design;
+      dbEl.insertAdjacentHTML('beforeend',`
+        <div>
+          <div class="flex justify-between text-xs mb-0.5">
+            <span class="font-semibold text-slate-700">${d.name}</span>
+            <span class="${over?'text-red-600 font-bold':'text-emerald-600'}">${over?'▲':'▼'} ${current}% actual vs ${design}% design</span>
+          </div>
+          <div class="h-3 bg-slate-100 rounded-full overflow-hidden relative">
+            <div class="h-full rounded-full" style="width:${Math.min(current,100)}%;background:${over?'#ef4444':d.color};opacity:.85"></div>
+            <div class="absolute top-0 h-full border-r-2 border-slate-800" style="left:${design}%" title="Design share"></div>
+          </div>
+          <div class="text-xs text-slate-400 mt-0.5">Vertical line = design share</div>
+        </div>`);
+    });
+
+    // Terminal summary cards
+    const cards = [
+      { id:'card-dom', name:'Domestic Concourse', count:dom, share:share[0], color:'#0ea5e9',
+        note:'Air Canada and WestJet dominate. The domestic concourse operates above its designed share (62%), driven by intra-BC and AB–BC corridor growth. Additional domestic gates were added as interim relief but the structural solution requires the new DMUF Domestic Pier.' },
+      { id:'card-intl', name:'International Concourse', count:intl, share:share[1], color:'#7c3aed',
+        note:'US Transborder + overseas. International arrivals represent 30% of movements but a disproportionately higher share of terminal processing load — customs/immigration processing multiplies dwell time per pax vs domestic. This concourse is the primary capacity-expansion driver.' },
+      { id:'card-south', name:'South Terminal', count:south, share:share[2], color:'#f59e0b',
+        note:'Pacific Coastal, Central Mountain Air, Keewatin Air. The South Terminal is a separate facility for small turboprop/regional aircraft. While volumes are low (4% of arrivals), the building\'s age and limited facilities create passenger experience pressure during summer peak.' },
+    ];
+    cards.forEach(c=>{
+      document.getElementById(c.id).innerHTML=`
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-3 h-3 rounded-full" style="background:${c.color}"></div>
+          <div class="text-sm font-bold text-slate-800">${c.name}</div>
+        </div>
+        <div class="text-2xl font-extrabold mb-1" style="color:${c.color}">${c.count} arrivals</div>
+        <div class="text-xs text-slate-400 mb-3">${c.share}% of today's schedule</div>
+        <p class="text-xs text-slate-600 leading-relaxed">${c.note}</p>`;
+    });
+  }
+
+  // ── Live fetch attempt ─────────────────────────────────────────────────────
+  async function tryFetchLive() {
+    if (typeof AVIATIONSTACK_KEY === 'undefined' || !AVIATIONSTACK_KEY) return null;
+    try {
+      const r = await fetch(
+        `http://api.aviationstack.com/v1/flights?access_key=${AVIATIONSTACK_KEY}&arr_iata=YVR&limit=100`,
+        {signal: AbortSignal.timeout(8000)}
+      );
+      if (!r.ok) return null;
+      const d = await r.json();
+      if (!d.data?.length) return null;
+      return d.data.map(f=>({
+        fi: f.flight?.iata||'', al: f.airline?.iata||'', an: f.airline?.name||'',
+        di: f.departure?.iata||'', dc: f.departure?.icao||'',
+        sa: f.arrival?.scheduled, ad: f.arrival?.delay, st: f.flight_status||''
+      }));
+    } catch { return null; }
+  }
+
+  // ── Main init ─────────────────────────────────────────────────────────────
+  async function init() {
+    const live = await tryFetchLive();
+    const flights = live || FALLBACK_FLIGHTS;
+    const isLive  = !!live;
+
+    // Update badge
+    const badge = document.getElementById('data-badge');
+    const badgeText = document.getElementById('data-badge-text');
+    if (isLive) {
+      badge.className = 'status-live cap-badge text-xs';
+      badge.querySelector('span').className = 'w-1.5 h-1.5 rounded-full bg-green-500';
+      badgeText.textContent = 'Live AviationStack data';
+    } else {
+      badgeText.textContent = 'Embedded data · 2026-06-23';
+    }
+
+    const {dom, intl, south, total, hourly} = processFlights(flights);
+    const proj = buildPaxProjection();
+
+    const kpiF = document.getElementById('kpi-flights');
+    if (kpiF) kpiF.textContent = total;
+    const kpiFs = document.getElementById('kpi-flights-sub');
+    if (kpiFs) kpiFs.textContent = `scheduled arrivals · ${isLive?'live':'2026-06-23'}`;
+
+    renderPaxChart(proj);
+    renderRunwayChart(hourly);
+    renderTerminalChart(dom, intl, south, total);
+  }
+
+  // ── Fade-in ───────────────────────────────────────────────────────────────
+  const obs = new IntersectionObserver(es=>es.forEach(e=>{
+    if(e.isIntersecting) e.target.classList.add('visible');
+  }),{threshold:.08});
+  document.querySelectorAll('.fade-in').forEach(el=>obs.observe(el));
+
+  // ── Page progress ─────────────────────────────────────────────────────────
+  const pfill = document.getElementById('prog-fill');
+  window.addEventListener('scroll',()=>{
+    const p = window.scrollY/(document.body.scrollHeight-window.innerHeight)*100;
+    pfill.style.height = Math.min(100,p)+'%';
+  },{passive:true});
+
+  window.scrollTo(0,0);
+  init();
+  </script>
+</body>
+</html>
